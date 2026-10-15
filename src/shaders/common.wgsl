@@ -10,10 +10,65 @@ struct LightSet {
     lights: array<Light>
 }
 
-// TODO-2: you may want to create a ClusterSet struct similar to LightSet
+// ------------------------------------
+// Light clustering
+// ------------------------------------
+
+const numClusterTilesX: u32 = ${numClusterTilesX}u;
+const numClusterTilesY: u32 = ${numClusterTilesY}u;
+const numClusterZ: u32 = ${numClusterZ}u;
+const numClusters: u32 = numClusterTilesX * numClusterTilesY * numClusterZ;
+const maxLightsPerCluster: u32 = ${maxLightsPerCluster}u;
+
+const clusterNear: f32 = ${clusterNear}f;
+const clusterFar: f32 = ${clusterFar}f;
+
+// Match the camera's near/far planes
+const cameraNear: f32 = ${cameraNear}f;
+const cameraFar: f32 = ${cameraFar}f;
+
+// Returns the index of the cluster containing the given tile coordinates and depth slice
+fn clusterIndex(tileX: u32, tileY: u32, sliceZ: u32) -> u32 {
+    return (sliceZ * numClusterTilesY + tileY) * numClusterTilesX + tileX;
+}
+
+// View distance of the near bound of depth slice sliceZ
+fn clusterZSliceNear(sliceZ: u32) -> f32 {
+    return clusterNear * pow(clusterFar / clusterNear, f32(sliceZ) / f32(numClusterZ));
+}
+
+// View distance of the far bound of depth slice sliceZ
+fn clusterZSliceFar(sliceZ: u32) -> f32 {
+    if (sliceZ >= numClusterZ - 1u) return cameraFar;
+    return clusterZSliceNear(sliceZ + 1u);
+}
+
+// View distance corresponding to a given NDC depth value
+// Inverse of depthFromViewDistance
+fn viewDistanceFromDepth(depthNdc: f32) -> f32 {
+    return cameraFar * cameraNear / (cameraFar - depthNdc * (cameraFar - cameraNear));
+}
+
+// NDC depth value for a given view distance
+// Inverse of viewDistanceFromDepth
+fn depthFromViewDistance(viewDistance: f32) -> f32 {
+    let range = cameraFar - cameraNear;
+    return cameraFar / range - (cameraFar * cameraNear / range) / viewDistance;
+}
+
+// Index of the depth slice containing the given view distance
+// Inverse of clusterZSliceNear/Far
+fn clusterZIndex(viewDistance: f32) -> u32 {
+    if (viewDistance <= clusterNear) return 0u;
+    let t = log(viewDistance / clusterNear) / log(clusterFar / clusterNear);
+    return min(u32(t * f32(numClusterZ)), numClusterZ - 1u);
+}
 
 struct CameraUniforms {
     viewProjMat: mat4x4f,
+    invViewProjMat: mat4x4f,
+    viewportSize: vec2f,
+    padding: vec2f,
 }
 
 // CHECKITOUT: this special attenuation function ensures lights don't affect geometry outside the maximum light radius

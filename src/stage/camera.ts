@@ -2,15 +2,27 @@ import { Mat4, mat4, Vec3, vec3 } from "wgpu-matrix";
 import { toRadians } from "../math_util";
 import { device, canvas, fovYDegrees, aspectRatio } from "../renderer";
 
+// Layout of `CameraUniforms` in src/shaders/common.wgsl, in floats. Keep the two in sync.
+const CAMERA_UNIFORMS_FLOATS = 36; // 16 + 16 + 2 + 2
+const OFFSET_VIEW_PROJ_MAT = 0;
+const OFFSET_INV_VIEW_PROJ_MAT = 16;
+const OFFSET_VIEWPORT_SIZE = 32;
+
 class CameraUniforms {
-    readonly buffer = new ArrayBuffer(16 * 4);
+    readonly buffer = new ArrayBuffer(CAMERA_UNIFORMS_FLOATS * Float32Array.BYTES_PER_ELEMENT);
     private readonly floatView = new Float32Array(this.buffer);
 
     set viewProjMat(mat: Float32Array) {
-        this.floatView.set(mat.subarray(0, 16), 0);
+        this.floatView.set(mat.subarray(0, 16), OFFSET_VIEW_PROJ_MAT);
     }
 
-    // TODO-2: add extra functions to set values needed for light clustering here
+    set invViewProjMat(mat: Float32Array) {
+        this.floatView.set(mat.subarray(0, 16), OFFSET_INV_VIEW_PROJ_MAT);
+    }
+
+    set viewportSize(size: [number, number]) {
+        this.floatView.set(size, OFFSET_VIEWPORT_SIZE);
+    }
 }
 
 export class Camera {
@@ -129,8 +141,8 @@ export class Camera {
         const viewMat = mat4.lookAt(this.cameraPos, lookPos, [0, 1, 0]);
         const viewProjMat = mat4.mul(this.projMat, viewMat);
         this.uniforms.viewProjMat = viewProjMat;
-
-        // TODO-2: write to extra buffers needed for light clustering here
+        this.uniforms.invViewProjMat = mat4.inverse(viewProjMat);
+        this.uniforms.viewportSize = [canvas.width, canvas.height];
 
         device.queue.writeBuffer(this.uniformsBuffer, 0, this.uniforms.buffer);
     }
