@@ -119,7 +119,9 @@ export class Primitive {
             size: indicesArray.byteLength,
             usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
         });
-        device.queue.writeBuffer(this.indexBuffer, 0, indicesArray);
+        // TypeScript 5.7 made the typed arrays generic over their buffer type, while WebGPU still
+        // declares ArrayBuffer backed views; the two have to be reconciled at the call site.
+        device.queue.writeBuffer(this.indexBuffer, 0, indicesArray as ArrayBufferView<ArrayBuffer>);
 
         this.vertexBuffer = device.createBuffer({
             label: "vertex buffer",
@@ -182,7 +184,8 @@ export class Node {
                 usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
             });
 
-            device.queue.writeBuffer(this.modelMatUniformBuffer, 0, this.transform);
+            // see the index buffer write above for why this cast is needed
+            device.queue.writeBuffer(this.modelMatUniformBuffer, 0, this.transform as ArrayBufferView<ArrayBuffer>);
 
             this.modelBindGroup = device.createBindGroup({
                 label: "model bind group",

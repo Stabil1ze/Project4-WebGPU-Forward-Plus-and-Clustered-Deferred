@@ -10,8 +10,7 @@ import naiveFragRaw from './naive.fs.wgsl?raw';
 import forwardPlusFragRaw from './forward_plus.fs.wgsl?raw';
 
 import clusteredDeferredFragRaw from './clustered_deferred.fs.wgsl?raw';
-import clusteredDeferredFullscreenVertRaw from './clustered_deferred_fullscreen.vs.wgsl?raw';
-import clusteredDeferredFullscreenFragRaw from './clustered_deferred_fullscreen.fs.wgsl?raw';
+import clusteredDeferredShadingRaw from './clustered_deferred_shading.cs.wgsl?raw';
 
 import moveLightsComputeRaw from './move_lights.cs.wgsl?raw';
 import clusteringComputeRaw from './clustering.cs.wgsl?raw';
@@ -33,8 +32,7 @@ export const constants = {
 
     // light clustering
     clusteringWorkgroupSize: 64,
-    // these have to stay literal values: evalShaderRaw() reads them back by name at runtime, and
-    // shorthand properties referencing module level bindings are dropped from the bundled output
+    shadingWorkgroupSize: 8,
     numClusterTilesX: 16,
     numClusterTilesY: 16,
     numClusterZ: 24,
@@ -51,11 +49,7 @@ export const constants = {
 // =================================
 
 function evalShaderRaw(raw: string) {
-    // Substituting the ${name} placeholders by hand rather than through eval matters for the
-    // production build: the bundler removes object properties that are never read by the host code,
-    // and only a computed access like the one below stops it from dropping the constants that the
-    // shaders reference, which would leave the deployed build compiling "undefinedu" and rendering
-    // nothing at all.
+    // replace ${name} with the value of constants.name
     return raw.replace(/\$\{(\w+)\}/g, (_, name: string) => {
         const value = (constants as Record<string, unknown>)[name];
         if (value === undefined) {
@@ -77,8 +71,7 @@ export const naiveFragSrc: string = processShaderRaw(naiveFragRaw);
 export const forwardPlusFragSrc: string = processShaderRaw(forwardPlusFragRaw);
 
 export const clusteredDeferredFragSrc: string = processShaderRaw(clusteredDeferredFragRaw);
-export const clusteredDeferredFullscreenVertSrc: string = processShaderRaw(clusteredDeferredFullscreenVertRaw);
-export const clusteredDeferredFullscreenFragSrc: string = processShaderRaw(clusteredDeferredFullscreenFragRaw);
+export const clusteredDeferredShadingSrc: string = processShaderRaw(clusteredDeferredShadingRaw);
 
 export const moveLightsComputeSrc: string = processShaderRaw(moveLightsComputeRaw);
 export const clusteringComputeSrc: string = processShaderRaw(clusteringComputeRaw);

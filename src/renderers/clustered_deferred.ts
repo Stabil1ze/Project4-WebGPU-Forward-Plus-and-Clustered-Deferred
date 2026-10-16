@@ -3,7 +3,9 @@ import * as shaders from '../shaders/shaders';
 import { Stage } from '../stage/stage';
 
 // Clustered Deferred Renderer
-// Uses the Forward+ light clustering as a base, but splits rendering into two passes
+// Uses the Forward+ light clustering as a base, but splits rendering into two passes: a G-buffer
+// pass that stores albedo and the packed normal, and a compute shading pass that reads them back,
+// reconstructs the world position from the depth buffer and lights every pixel exactly once.
 
 export class ClusteredDeferredRenderer extends renderer.Renderer {
     depthTexture: GPUTexture;
@@ -11,19 +13,17 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
 
     albedoTexture: GPUTexture;
     normalTexture: GPUTexture;
-    positionTexture: GPUTexture;
     
-    // G-buffer pass that stores albedo, normal, and position
+    // G-buffer pass that stores albedo and the octahedral packed normal
     gbufferBindGroupLayout: GPUBindGroupLayout;
-    gbufferBindGroup: GPUBindGroup;
     gbufferSceneBindGroupLayout: GPUBindGroupLayout;
     gbufferSceneBindGroup: GPUBindGroup;
     gbufferPipeline: GPURenderPipeline;
 
-    // Fullscreen shading pass that reads the G-buffer and performs lighting
+    // Compute shading pass that reads the G-buffer and performs lighting
     shadingBindGroupLayout: GPUBindGroupLayout;
     shadingBindGroup: GPUBindGroup;
-    shadingPipeline: GPURenderPipeline;
+    shadingPipeline: GPUComputePipeline;
 
     constructor(stage: Stage) {
         super(stage);
@@ -37,8 +37,8 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
         this.depthTextureView = this.depthTexture.createView();
 
         this.albedoTexture = this.createGBufferTexture("clustered deferred albedo", "rgba8unorm");
-        this.normalTexture = this.createGBufferTexture("clustered deferred normal", "rgba16float");
-        this.positionTexture = this.createGBufferTexture("clustered deferred position", "rgba32float");
+        // one u32 per pixel: two octahedral coordinates of 16 bits each
+        this.normalTexture = this.createGBufferTexture("clustered deferred normal", "r32uint");
 
         // ---- G-buffer pass ----
 
@@ -93,35 +93,34 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
                 }),
                 targets: [
                     { format: "rgba8unorm" },
-                    { format: "rgba16float" },
-                    { format: "rgba32float" }
+                    { format: "r32uint" }
                 ]
             }
         });
 
-        // ---- fullscreen shading pass ----
+        // ---- compute shading pass ----
 
         this.shadingBindGroupLayout = renderer.device.createBindGroupLayout({
             label: "clustered deferred shading bind group layout",
             entries: [
                 { // cameraUniforms, read for the viewport size used by the cluster lookup
                     binding: 0,
-                    visibility: GPUShaderStage.FRAGMENT,
+                    visibility: GPUShaderStage.COMPUTE,
                     buffer: { type: "uniform" }
                 },
                 { // lightSet
                     binding: 1,
-                    visibility: GPUShaderStage.FRAGMENT,
+                    visibility: GPUShaderStage.COMPUTE,
                     buffer: { type: "read-only-storage" }
                 },
                 { // clusterLightCounts
                     binding: 2,
-                    visibility: GPUShaderStage.FRAGMENT,
+                    visibility: GPUShaderStage.COMPUTE,
                     buffer: { type: "read-only-storage" }
                 },
                 { // clusterLightIndices
                     binding: 3,
-                    visibility: GPUShaderStage.FRAGMENT,
+                    visibility: GPUShaderStage.COMPUTE,
                     buffer: { type: "read-only-storage" }
                 }
             ]
@@ -155,52 +154,29 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
             entries: [
                 { // albedo
                     binding: 0,
-                    visibility: GPUShaderStage.FRAGMENT,
-                    texture: { sampleType: "unfilterable-float" }
+                    visibility: GPUShaderStage.COMPUTE,
+                    texture: { sampleType: "float" }
                 },
-                { // normal
+                { // normal, two octahedral coordinates packed into a u32
                     binding: 1,
-                    visibility: GPUShaderStage.FRAGMENT,
-                    texture: { sampleType: "unfilterable-float" }
-                },
-                { // position
-                    binding: 2,
-                    visibility: GPUShaderStage.FRAGMENT,
-                    texture: { sampleType: "unfilterable-float" }
+                    visibility: GPUShaderStage.COMPUTE,
+                    texture: { sampleType: "uint" }
                 },
                 { // depth
-                    binding: 3,
-                    visibility: GPUShaderStage.FRAGMENT,
-                    texture: { sampleType: "depth" }
-                }
-            ]
-        });
-
-        this.gbufferBindGroup = renderer.device.createBindGroup({
-            label: "clustered deferred g-buffer bind group",
-            layout: this.gbufferBindGroupLayout,
-            entries: [
-                {
-                    binding: 0,
-                    resource: this.albedoTexture.createView()
-                },
-                {
-                    binding: 1,
-                    resource: this.normalTexture.createView()
-                },
-                {
                     binding: 2,
-                    resource: this.positionTexture.createView()
+                    visibility: GPUShaderStage.COMPUTE,
+                    texture: { sampleType: "depth" }
                 },
-                {
+                { // shaded output, written by the compute pass
                     binding: 3,
-                    resource: this.depthTextureView
+                    visibility: GPUShaderStage.COMPUTE,
+                    storageTexture: { access: "write-only", format: "rgba8unorm" }
                 }
             ]
         });
 
-        this.shadingPipeline = renderer.device.createRenderPipeline({
-            label: "clustered deferred shading pipeline",
+        this.shadingPipeline = renderer.device.createComputePipeline({
+            label: "clustered deferred shading compute pipeline",
             layout: renderer.device.createPipelineLayout({
                 label: "clustered deferred shading pipeline layout",
                 bindGroupLayouts: [
@@ -208,20 +184,12 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
                     this.gbufferBindGroupLayout
                 ]
             }),
-            vertex: {
+            compute: {
                 module: renderer.device.createShaderModule({
-                    label: "clustered deferred fullscreen vert shader",
-                    code: shaders.clusteredDeferredFullscreenVertSrc
-                })
-            },
-            fragment: {
-                module: renderer.device.createShaderModule({
-                    label: "clustered deferred fullscreen frag shader",
-                    code: shaders.clusteredDeferredFullscreenFragSrc
+                    label: "clustered deferred shading compute shader",
+                    code: shaders.clusteredDeferredShadingSrc
                 }),
-                targets: [
-                    { format: renderer.canvasFormat }
-                ]
+                entryPoint: "main"
             }
         });
     }
@@ -233,6 +201,21 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
             size: [renderer.canvas.width, renderer.canvas.height],
             format,
             usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
+        });
+    }
+
+    // The canvas texture is a new texture every frame, so the bind group holding it is rebuilt each
+    // frame; the G-buffer views on the other bindings never change.
+    private createShadingBindGroup(output: GPUTextureView): GPUBindGroup {
+        return renderer.device.createBindGroup({
+            label: "clustered deferred shading bind group",
+            layout: this.gbufferBindGroupLayout,
+            entries: [
+                { binding: 0, resource: this.albedoTexture.createView() },
+                { binding: 1, resource: this.normalTexture.createView() },
+                { binding: 2, resource: this.depthTextureView },
+                { binding: 3, resource: output }
+            ]
         });
     }
     
@@ -253,12 +236,6 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
                 },
                 {
                     view: this.normalTexture.createView(),
-                    clearValue: [0, 0, 0, 0],
-                    loadOp: "clear",
-                    storeOp: "store"
-                },
-                {
-                    view: this.positionTexture.createView(),
                     clearValue: [0, 0, 0, 0],
                     loadOp: "clear",
                     storeOp: "store"
@@ -286,21 +263,17 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
 
         gbufferPass.end();
 
-        const shadingPass = encoder.beginRenderPass({
-            label: "clustered deferred shading pass",
-            colorAttachments: [
-                {
-                    view: renderer.context.getCurrentTexture().createView(),
-                    clearValue: [0, 0, 0, 0],
-                    loadOp: "clear",
-                    storeOp: "store"
-                }
-            ]
-        });
+        const shadingPass = encoder.beginComputePass({ label: "clustered deferred shading pass" });
         shadingPass.setPipeline(this.shadingPipeline);
         shadingPass.setBindGroup(shaders.constants.bindGroup_scene, this.shadingBindGroup);
-        shadingPass.setBindGroup(shaders.constants.bindGroup_gbuffer, this.gbufferBindGroup);
-        shadingPass.draw(3);
+        shadingPass.setBindGroup(
+            shaders.constants.bindGroup_gbuffer,
+            this.createShadingBindGroup(renderer.context.getCurrentTexture().createView())
+        );
+        shadingPass.dispatchWorkgroups(
+            Math.ceil(renderer.canvas.width / shaders.constants.shadingWorkgroupSize),
+            Math.ceil(renderer.canvas.height / shaders.constants.shadingWorkgroupSize)
+        );
         shadingPass.end();
 
         renderer.device.queue.submit([encoder.finish()]);

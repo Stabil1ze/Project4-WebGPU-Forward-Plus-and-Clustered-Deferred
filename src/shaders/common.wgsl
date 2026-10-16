@@ -1,4 +1,4 @@
-// CHECKITOUT: code that you add here will be prepended to all shaders
+// Common shader code shared between all shaders
 
 struct Light {
     pos: vec3f,
@@ -81,6 +81,37 @@ struct CameraUniforms {
     invViewProjMat: mat4x4f,
     viewportSize: vec2f,
     padding: vec2f,
+}
+
+// ------------------------------------
+// Octahedral normal encoding
+// ------------------------------------
+
+fn octahedralWrap(v: vec2f) -> vec2f {
+    return (1.f - abs(v.yx)) * vec2f(select(-1.f, 1.f, v.x >= 0.f), select(-1.f, 1.f, v.y >= 0.f));
+}
+
+// Packs a normalized vector into a 32-bit unsigned integer using octahedral encoding
+fn packNormalOctahedral(n: vec3f) -> u32 {
+    let projected = n / (abs(n.x) + abs(n.y) + abs(n.z));
+    let oct = select(octahedralWrap(projected.xy), projected.xy, projected.z >= 0.f);
+    let quantised = vec2i(round(clamp(oct, vec2f(-1.f), vec2f(1.f)) * 32767.f));
+    return (u32(quantised.x) & 0xFFFFu) | ((u32(quantised.y) & 0xFFFFu) << 16u);
+}
+
+// sign extends the low 16 bits of v and returns them as a float in [-1, 1]
+fn signExtendNormalComponent(v: u32) -> f32 {
+    let bits = v & 0xFFFFu;
+    return f32(i32(bits) - select(0, 65536, bits >= 0x8000u)) / 32767.f;
+}
+
+fn unpackNormalOctahedral(packed: u32) -> vec3f {
+    var n = vec3f(signExtendNormalComponent(packed), signExtendNormalComponent(packed >> 16u), 0.f);
+    n.z = 1.f - abs(n.x) - abs(n.y);
+    let fold = max(-n.z, 0.f);
+    n.x += select(fold, -fold, n.x >= 0.f);
+    n.y += select(fold, -fold, n.y >= 0.f);
+    return normalize(n);
 }
 
 // CHECKITOUT: this special attenuation function ensures lights don't affect geometry outside the maximum light radius

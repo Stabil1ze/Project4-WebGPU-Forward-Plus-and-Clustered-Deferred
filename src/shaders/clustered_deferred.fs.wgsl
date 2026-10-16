@@ -1,5 +1,4 @@
 // G-buffer pass
-// Only store albedo, normal and position, no lighting calculations
 
 @group(${bindGroup_material}) @binding(0) var diffuseTex: texture_2d<f32>;
 @group(${bindGroup_material}) @binding(1) var diffuseTexSampler: sampler;
@@ -14,8 +13,7 @@ struct FragmentInput
 struct GBufferOutput
 {
     @location(0) albedo: vec4f,
-    @location(1) normal: vec4f,
-    @location(2) position: vec4f
+    @location(1) packedNormal: u32
 }
 
 @fragment
@@ -28,7 +26,6 @@ fn main(in: FragmentInput) -> GBufferOutput
 
     var out: GBufferOutput;
     out.albedo = vec4f(diffuseColor.rgb, 1.f);
-    out.normal = vec4f(normalize(in.nor), 1.f);
-    out.position = vec4f(in.pos, 1.f);
+    out.packedNormal = packNormalOctahedral(normalize(in.nor));
     return out;
 }
