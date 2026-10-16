@@ -18,13 +18,9 @@ import clusteringComputeRaw from './clustering.cs.wgsl?raw';
 
 import clusterDebugFragRaw from './cluster_debug.fs.wgsl?raw';
 
-// CONSTANTS (for use in shaders)
+// CONSTANTS FOR SHADERS
 // =================================
 
-// CHECKITOUT: feel free to add more constants here and to refer to them in your shader code
-
-// Note that these are declared in a somewhat roundabout way because otherwise minification will drop variables
-// that are unused in host side code.
 const numClusterTilesX = 16;
 const numClusterTilesY = 16;
 const numClusterZ = 24;
@@ -33,6 +29,7 @@ export const constants = {
     bindGroup_scene: 0,
     bindGroup_model: 1,
     bindGroup_material: 2,
+    bindGroup_gbuffer: 1, // the G-buffer textures the Clustered Deferred shading pass reads
 
     moveLightsWorkgroupSize: 128,
 
