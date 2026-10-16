@@ -21,10 +21,6 @@ import clusterDebugFragRaw from './cluster_debug.fs.wgsl?raw';
 // CONSTANTS FOR SHADERS
 // =================================
 
-const numClusterTilesX = 16;
-const numClusterTilesY = 16;
-const numClusterZ = 24;
-
 export const constants = {
     bindGroup_scene: 0,
     bindGroup_model: 1,
@@ -37,10 +33,12 @@ export const constants = {
 
     // light clustering
     clusteringWorkgroupSize: 64,
-    numClusterTilesX,
-    numClusterTilesY,
-    numClusterZ,
-    numClusters: numClusterTilesX * numClusterTilesY * numClusterZ,
+    // these have to stay literal values: evalShaderRaw() reads them back by name at runtime, and
+    // shorthand properties referencing module level bindings are dropped from the bundled output
+    numClusterTilesX: 16,
+    numClusterTilesY: 16,
+    numClusterZ: 24,
+    numClusters: 16 * 16 * 24,
     maxLightsPerCluster: 512,
 
     // camera planes
@@ -53,7 +51,18 @@ export const constants = {
 // =================================
 
 function evalShaderRaw(raw: string) {
-    return eval('`' + raw.replaceAll('${', '${constants.') + '`');
+    // Substituting the ${name} placeholders by hand rather than through eval matters for the
+    // production build: the bundler removes object properties that are never read by the host code,
+    // and only a computed access like the one below stops it from dropping the constants that the
+    // shaders reference, which would leave the deployed build compiling "undefinedu" and rendering
+    // nothing at all.
+    return raw.replace(/\$\{(\w+)\}/g, (_, name: string) => {
+        const value = (constants as Record<string, unknown>)[name];
+        if (value === undefined) {
+            throw new Error(`unknown shader constant: ${name}`);
+        }
+        return String(value);
+    });
 }
 
 const commonSrc: string = evalShaderRaw(commonRaw);
