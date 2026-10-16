@@ -2,6 +2,7 @@ import Stats from 'stats.js';
 import { GUI } from 'dat.gui';
 
 import { initWebGPU, Renderer } from './renderer';
+import * as shaders from './shaders/shaders';
 import { NaiveRenderer } from './renderers/naive';
 import { ForwardPlusRenderer } from './renderers/forward_plus';
 import { ClusteredDeferredRenderer } from './renderers/clustered_deferred';
@@ -40,6 +41,13 @@ function setRenderer(mode: string) {
         case renderModes.naive:
             renderer = new NaiveRenderer(stage);
             break;
+        case renderModes.clusterDebug:
+            renderer = new NaiveRenderer(stage, {
+                fragmentShaderSrc: shaders.clusterDebugFragSrc,
+                label: "cluster debug",
+                runClustering: true
+            });
+            break;
         case renderModes.forwardPlus:
             renderer = new ForwardPlusRenderer(stage);
             break;
@@ -49,7 +57,7 @@ function setRenderer(mode: string) {
     }
 }
 
-const renderModes = { naive: 'naive', forwardPlus: 'forward+', clusteredDeferred: 'clustered deferred' };
+const renderModes = { naive: 'naive', clusterDebug: 'cluster debug', forwardPlus: 'forward+', clusteredDeferred: 'clustered deferred' };
 let renderModeController = gui.add({ mode: renderModes.naive }, 'mode', renderModes);
 renderModeController.onChange(setRenderer);
 

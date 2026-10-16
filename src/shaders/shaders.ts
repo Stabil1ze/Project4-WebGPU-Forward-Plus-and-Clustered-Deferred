@@ -16,6 +16,8 @@ import clusteredDeferredFullscreenFragRaw from './clustered_deferred_fullscreen.
 import moveLightsComputeRaw from './move_lights.cs.wgsl?raw';
 import clusteringComputeRaw from './clustering.cs.wgsl?raw';
 
+import clusterDebugFragRaw from './cluster_debug.fs.wgsl?raw';
+
 // CONSTANTS (for use in shaders)
 // =================================
 
@@ -23,6 +25,10 @@ import clusteringComputeRaw from './clustering.cs.wgsl?raw';
 
 // Note that these are declared in a somewhat roundabout way because otherwise minification will drop variables
 // that are unused in host side code.
+const numClusterTilesX = 16;
+const numClusterTilesY = 16;
+const numClusterZ = 24;
+
 export const constants = {
     bindGroup_scene: 0,
     bindGroup_model: 1,
@@ -34,9 +40,10 @@ export const constants = {
 
     // light clustering
     clusteringWorkgroupSize: 64,
-    numClusterTilesX: 16,
-    numClusterTilesY: 16,
-    numClusterZ: 24,
+    numClusterTilesX,
+    numClusterTilesY,
+    numClusterZ,
+    numClusters: numClusterTilesX * numClusterTilesY * numClusterZ,
     maxLightsPerCluster: 512,
 
     // camera planes
@@ -69,3 +76,5 @@ export const clusteredDeferredFullscreenFragSrc: string = processShaderRaw(clust
 
 export const moveLightsComputeSrc: string = processShaderRaw(moveLightsComputeRaw);
 export const clusteringComputeSrc: string = processShaderRaw(clusteringComputeRaw);
+
+export const clusterDebugFragSrc: string = processShaderRaw(clusterDebugFragRaw);

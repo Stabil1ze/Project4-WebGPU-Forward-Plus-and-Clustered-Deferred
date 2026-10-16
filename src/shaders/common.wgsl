@@ -17,7 +17,7 @@ struct LightSet {
 const numClusterTilesX: u32 = ${numClusterTilesX}u;
 const numClusterTilesY: u32 = ${numClusterTilesY}u;
 const numClusterZ: u32 = ${numClusterZ}u;
-const numClusters: u32 = numClusterTilesX * numClusterTilesY * numClusterZ;
+const numClusters: u32 = ${numClusters}u;
 const maxLightsPerCluster: u32 = ${maxLightsPerCluster}u;
 
 const clusterNear: f32 = ${clusterNear}f;
@@ -39,7 +39,9 @@ fn clusterZSliceNear(sliceZ: u32) -> f32 {
 
 // View distance of the far bound of depth slice sliceZ
 fn clusterZSliceFar(sliceZ: u32) -> f32 {
-    if (sliceZ >= numClusterZ - 1u) return cameraFar;
+    if (sliceZ >= numClusterZ - 1u) {
+        return cameraFar;
+    }
     return clusterZSliceNear(sliceZ + 1u);
 }
 
@@ -59,9 +61,19 @@ fn depthFromViewDistance(viewDistance: f32) -> f32 {
 // Index of the depth slice containing the given view distance
 // Inverse of clusterZSliceNear/Far
 fn clusterZIndex(viewDistance: f32) -> u32 {
-    if (viewDistance <= clusterNear) return 0u;
+    if (viewDistance <= clusterNear) {
+        return 0u;
+    }
     let t = log(viewDistance / clusterNear) / log(clusterFar / clusterNear);
     return min(u32(t * f32(numClusterZ)), numClusterZ - 1u);
+}
+
+// Index of the cluster containing the given fragment coordinates and depth
+// Inverse of clusterIndex
+fn clusterIndexForFragment(fragCoord: vec4f, viewportSize: vec2f) -> u32 {
+    let tileX = min(u32(fragCoord.x * f32(numClusterTilesX) / viewportSize.x), numClusterTilesX - 1u);
+    let tileY = min(u32(fragCoord.y * f32(numClusterTilesY) / viewportSize.y), numClusterTilesY - 1u);
+    return clusterIndex(tileX, tileY, clusterZIndex(viewDistanceFromDepth(fragCoord.z)));
 }
 
 struct CameraUniforms {

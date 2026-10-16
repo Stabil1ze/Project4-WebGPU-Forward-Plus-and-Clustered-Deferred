@@ -2,6 +2,12 @@ import * as renderer from '../renderer';
 import * as shaders from '../shaders/shaders';
 import { Stage } from '../stage/stage';
 
+export interface NaiveRendererOptions {
+    fragmentShaderSrc?: string;
+    label?: string;
+    runClustering?: boolean;
+}
+
 export class NaiveRenderer extends renderer.Renderer {
     sceneUniformsBindGroupLayout: GPUBindGroupLayout;
     sceneUniformsBindGroup: GPUBindGroup;
@@ -11,19 +17,36 @@ export class NaiveRenderer extends renderer.Renderer {
 
     pipeline: GPURenderPipeline;
 
-    constructor(stage: Stage) {
+    private readonly runClustering: boolean;
+
+    // Naive geometry pass renderer
+    constructor(stage: Stage, options: NaiveRendererOptions = {}) {
         super(stage);
+
+        const fragmentShaderSrc = options.fragmentShaderSrc ?? shaders.naiveFragSrc;
+        const label = options.label ?? "naive";
+        this.runClustering = options.runClustering ?? false;
 
         this.sceneUniformsBindGroupLayout = renderer.device.createBindGroupLayout({
             label: "scene uniforms bind group layout",
             entries: [
                 { // camera uniforms
                     binding: 0,
-                    visibility: GPUShaderStage.VERTEX,
+                    visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
                     buffer: { type: "uniform" }
                 },
                 { // lightSet
                     binding: 1,
+                    visibility: GPUShaderStage.FRAGMENT,
+                    buffer: { type: "read-only-storage" }
+                },
+                { // clusterLightCounts
+                    binding: 2,
+                    visibility: GPUShaderStage.FRAGMENT,
+                    buffer: { type: "read-only-storage" }
+                },
+                { // clusterLightIndices
+                    binding: 3,
                     visibility: GPUShaderStage.FRAGMENT,
                     buffer: { type: "read-only-storage" }
                 }
@@ -41,6 +64,14 @@ export class NaiveRenderer extends renderer.Renderer {
                 {
                     binding: 1,
                     resource: { buffer: this.lights.lightSetStorageBuffer }
+                },
+                {
+                    binding: 2,
+                    resource: { buffer: this.lights.clusterLightCountsBuffer }
+                },
+                {
+                    binding: 3,
+                    resource: { buffer: this.lights.clusterLightIndicesBuffer }
                 }
             ]
         });
@@ -54,7 +85,7 @@ export class NaiveRenderer extends renderer.Renderer {
 
         this.pipeline = renderer.device.createRenderPipeline({
             layout: renderer.device.createPipelineLayout({
-                label: "naive pipeline layout",
+                label: `${label} pipeline layout`,
                 bindGroupLayouts: [
                     this.sceneUniformsBindGroupLayout,
                     renderer.modelBindGroupLayout,
@@ -68,15 +99,15 @@ export class NaiveRenderer extends renderer.Renderer {
             },
             vertex: {
                 module: renderer.device.createShaderModule({
-                    label: "naive vert shader",
+                    label: `${label} vert shader`,
                     code: shaders.naiveVertSrc
                 }),
                 buffers: [ renderer.vertexBufferLayout ]
             },
             fragment: {
                 module: renderer.device.createShaderModule({
-                    label: "naive frag shader",
-                    code: shaders.naiveFragSrc,
+                    label: `${label} frag shader`,
+                    code: fragmentShaderSrc,
                 }),
                 targets: [
                     {
@@ -89,6 +120,11 @@ export class NaiveRenderer extends renderer.Renderer {
 
     override draw() {
         const encoder = renderer.device.createCommandEncoder();
+
+        if (this.runClustering) {
+            this.lights.doLightClustering(encoder);
+        }
+
         const canvasTextureView = renderer.context.getCurrentTexture().createView();
 
         const renderPass = encoder.beginRenderPass({
