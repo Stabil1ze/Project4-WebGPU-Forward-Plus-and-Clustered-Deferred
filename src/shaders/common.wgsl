@@ -72,7 +72,7 @@ fn clusterZIndex(viewDistance: f32) -> u32 {
 // Inverse of clusterIndex
 fn clusterIndexForFragment(fragCoord: vec4f, viewportSize: vec2f) -> u32 {
     let tileX = min(u32(fragCoord.x * f32(numClusterTilesX) / viewportSize.x), numClusterTilesX - 1u);
-    let tileY = min(u32(fragCoord.y * f32(numClusterTilesY) / viewportSize.y), numClusterTilesY - 1u);
+    let tileY = numClusterTilesY - 1u - min(u32(fragCoord.y * f32(numClusterTilesY) / viewportSize.y), numClusterTilesY - 1u);
     return clusterIndex(tileX, tileY, clusterZIndex(viewDistanceFromDepth(fragCoord.z)));
 }
 
