@@ -36,7 +36,7 @@ switches between four renderers:
 | Mode | |
 |---|---|
 | **Naive** | Every fragment loops over every light in the scene. |
-| **Forward+** | 16 x 16 screen tiles x 24 exponentially spaced depth slices (6144 clusters); each fragment walks only the lights of its own cluster. |
+| **Forward+** | 16 x 16 screen tiles x 24 exponentially spaced depth slices (6144 clusters); each fragment walks only the lights of its own cluster. A depth prepass feeds the clustering and the shading pass, so every visible fragment is shaded once. |
 | **Clustered Deferred** | The same clustering, split into a G-buffer pass and a compute shading pass so every pixel is lit exactly once. |
 | **Cluster debug** | Tints every fragment by the number of lights in its cluster. |
 
@@ -82,19 +82,37 @@ browser presents at 165 Hz, so every value is a multiple of 6.06 ms: a reported
 
 | Frame time (ms) | 100 | 500 | 1000 | 2000 | 5000 |
 |---|---|---|---|---|---|
-| Naive | 30.3 | 127.2 | 242.3 | 472.5 | 1181.5 |
-| Forward+ | 6.1 | 12.1 | 36.3 | 36.4 | 42.3 |
-| Clustered Deferred | 6.1 | 6.1 | 18.1 | 18.2 | 18.2 |
+| Naive | 24.3 | 115.4 | 230.7 | 466.4 | 1169.5 |
+| Forward+ | 6.1 | 6.1 | 12.1 | 12.1 | 12.2 |
+| Clustered Deferred | 6.1 | 6.1 | 11.8 | 11.8 | 12.0 |
 
 ![](img/perf_forward_vs_deferred.png)
 
-* Naive scales linearly with the light count, from 30 ms at 100 lights to
-  1182 ms at 5000.
+* Naive scales linearly with the light count, from 24 ms at 100 lights to
+  1170 ms at 5000.
 * Forward+ and Clustered Deferred are flat from 1000 to 5000 lights: Forward+
-  moves from 36.3 to 42.3 ms while the light count quintuples.
-* Clustered Deferred is 2.0-2.3x faster than Forward+ over that range, and both
+  moves from 12.1 to 12.2 ms and Clustered Deferred from 11.8 to 12.0 ms while
+  the light count quintuples.
+* The two are within one refresh step of each other over that range, and both
   cluster lists saturate at 186 of the 6144 clusters hitting the 512 lights per
   cluster cap.
+
+### Depth prepass
+
+Forward+ renders the scene to a depth-only prepass first, then shades with
+`depthCompare: "equal"` and no depth write, so every visible fragment is shaded
+once. The same depth buffer marks which clusters hold visible geometry, and
+only those clusters are clustered.
+
+| Forward+ | 1000 | 2000 | 5000 |
+|---|---|---|---|
+| Before the prepass | 36.3 | 36.4 | 42.3 |
+| After the prepass | 12.1 | 12.1 | 12.2 |
+
+504 of the 6144 clusters hold visible geometry, so depth-based culling removes
+91.8% of the per-cluster light scans. The clustering pass was not the
+bottleneck: with culling turned off the frame time stays inside the same
+refresh step over 1000-5000 lights.
 
 ### G-buffer optimisation
 
@@ -122,7 +140,7 @@ pixel, with the lights frozen so that every mode shades the identical scene
 | Comparison | Result |
 |---|---|
 | naive vs naive (control) | 0 differing pixels |
-| naive vs Forward+ | 0 differing pixels |
+| naive vs Forward+ | 189 pixels (0.0185%) differ by up to 239 levels, on surfaces where two primitives share a depth |
 | naive vs Clustered Deferred | 36% of pixels differ, 99.7% of those by a single level; mean channel error 0.148 |
 
 The clustering was additionally checked against an independent CPU
