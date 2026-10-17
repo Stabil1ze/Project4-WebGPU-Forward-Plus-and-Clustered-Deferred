@@ -24,9 +24,10 @@ Project 4 - WebGPU Forward+ and Clustered Deferred Shading**
 
 [![demo video](img/preview.gif)](img/demo.mp4)
 
-[img/demo.mp4](img/demo.mp4) is 45 seconds and covers all four modes: naive, Forward+, Clustered
-Deferred and the cluster debug view, ending with Forward+ and Clustered Deferred running the full
-5000 lights.
+[img/demo.mp4](img/demo.mp4) is 32 seconds at 1280x800. It starts with naive at 500 and at 5000
+lights, then shows Forward+ at 5000 lights twice along the same camera path - without and with the
+depth prepass - then the cluster debug view at 500 lights and Clustered Deferred at 5000 lights. The
+caption at the top of each clip is the frame rate measured in the page while that clip was recorded.
 
 ## What is implemented
 
