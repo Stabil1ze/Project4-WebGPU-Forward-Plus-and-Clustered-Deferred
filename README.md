@@ -72,30 +72,33 @@ the cluster lookup was checked.*
 
 ## Performance
 
-Frame times are medians of `requestAnimationFrame` intervals, measured in
-headless Chrome 154 at a 2560x1600 render target with the light animation
-pinned to a fixed moment so that every mode shades the identical scene. The
-browser presents at 165 Hz, so every value is a multiple of 6.06 ms: a reported
-6.1 ms means "6.06 ms or less, not resolvable".
+Frame times are the mean of `requestAnimationFrame` intervals over 20-180
+frames, measured in headless Chrome 154 at a 2560x1600 render target with the
+light animation pinned to a fixed moment so that every mode shades the identical
+scene. The browser presents at 165 Hz, so individual frames quantise to 6.06 ms
+and 6.1 ms means that no frame missed a present. Means are reported instead of
+medians because a configuration that sits on the refresh floor has a median
+that jumps between 6.1 and 12.1 ms.
 
 ![](img/perf_frame_time.png)
 
 | Frame time (ms) | 100 | 500 | 1000 | 2000 | 5000 |
 |---|---|---|---|---|---|
-| Naive | 24.3 | 115.4 | 230.7 | 466.4 | 1169.5 |
-| Forward+ | 6.1 | 6.1 | 12.1 | 12.1 | 12.2 |
-| Clustered Deferred | 6.1 | 6.1 | 11.8 | 11.8 | 12.0 |
+| Naive | 23.7 | 116.1 | 231.8 | 464.9 | 1168.9 |
+| Forward+ (no depth prepass) | 6.1 | 7.5 | 31.7 | 31.9 | 32.8 |
+| Forward+ | 6.1 | 6.1 | 11.7 | 12.1 | 13.1 |
+| Clustered Deferred | 6.1 | 6.1 | 8.6 | 9.3 | 10.0 |
 
 ![](img/perf_forward_vs_deferred.png)
 
 * Naive scales linearly with the light count, from 24 ms at 100 lights to
-  1170 ms at 5000.
-* Forward+ and Clustered Deferred are flat from 1000 to 5000 lights: Forward+
-  moves from 12.1 to 12.2 ms and Clustered Deferred from 11.8 to 12.0 ms while
-  the light count quintuples.
-* The two are within one refresh step of each other over that range, and both
-  cluster lists saturate at 186 of the 6144 clusters hitting the 512 lights per
-  cluster cap.
+  1169 ms at 5000.
+* Forward+ is flat at 32 ms from 1000 to 5000 lights before the depth prepass
+  and at 12-13 ms after it, while the light count quintuples.
+* Clustered Deferred stays at 9-10 ms over the same range, so the depth prepass
+  brings Forward+ from 3.3-3.7x behind Clustered Deferred to within 1.3-1.4x of it.
+* Both cluster lists saturate at 186 of the 6144 clusters hitting the 512 lights
+  per cluster cap.
 
 ### Depth prepass
 
@@ -106,13 +109,15 @@ only those clusters are clustered.
 
 | Forward+ | 1000 | 2000 | 5000 |
 |---|---|---|---|
-| Before the prepass | 36.3 | 36.4 | 42.3 |
-| After the prepass | 12.1 | 12.1 | 12.2 |
+| Before the prepass | 31.7 | 31.9 | 32.8 |
+| After the prepass | 11.7 | 12.1 | 13.1 |
+
+Both builds are drawn on the two charts above.
 
 504 of the 6144 clusters hold visible geometry, so depth-based culling removes
 91.8% of the per-cluster light scans. The clustering pass was not the
-bottleneck: with culling turned off the frame time stays inside the same
-refresh step over 1000-5000 lights.
+bottleneck: with culling turned off the frame time moves by less than 0.5 ms
+over 1000-5000 lights.
 
 ### G-buffer optimisation
 
@@ -122,7 +127,7 @@ plus one `u32` (8 bytes per pixel), by storing the normal octahedrally packed
 and reconstructing the position from depth, and the fullscreen fragment pass
 was replaced by the compute pass.
 
-| Clustered Deferred | 500 | 1000 | 2000 | 5000 |
+| Frame time (ms, median, measured before the depth prepass) | 500 | 1000 | 2000 | 5000 |
 |---|---|---|---|---|
 | Before (28 B/px, fullscreen pass) | 6.1 | 12.1 | 12.1 | 12.3 |
 | After (8 B/px, compute pass) | 6.1 | 12.1 | 12.1 | 12.3 |
