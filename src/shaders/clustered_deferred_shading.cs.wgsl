@@ -26,7 +26,7 @@ fn worldPositionFromDepth(pixel: vec2u, depthNdc: f32) -> vec3f {
 }
 
 @compute
-@workgroup_size(${shadingWorkgroupSize}, ${shadingWorkgroupSize})
+@workgroup_size(${screenWorkgroupSize}, ${screenWorkgroupSize})
 fn main(@builtin(global_invocation_id) globalIdx: vec3u)
 {
     let viewportSize = vec2u(cameraUniforms.viewportSize);

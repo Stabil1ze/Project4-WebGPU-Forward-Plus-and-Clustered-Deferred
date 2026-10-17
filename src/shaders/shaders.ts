@@ -12,6 +12,10 @@ import forwardPlusFragRaw from './forward_plus.fs.wgsl?raw';
 import clusteredDeferredFragRaw from './clustered_deferred.fs.wgsl?raw';
 import clusteredDeferredShadingRaw from './clustered_deferred_shading.cs.wgsl?raw';
 
+import depthPrepassFragRaw from './depth_prepass.fs.wgsl?raw';
+import clusterClearComputeRaw from './cluster_clear.cs.wgsl?raw';
+import clusterMarkComputeRaw from './cluster_mark.cs.wgsl?raw';
+
 import moveLightsComputeRaw from './move_lights.cs.wgsl?raw';
 import clusteringComputeRaw from './clustering.cs.wgsl?raw';
 
@@ -32,7 +36,8 @@ export const constants = {
 
     // light clustering
     clusteringWorkgroupSize: 64,
-    shadingWorkgroupSize: 8,
+    screenWorkgroupSize: 8,
+    clusterClearWorkgroupSize: 64,
     numClusterTilesX: 16,
     numClusterTilesY: 16,
     numClusterZ: 24,
@@ -72,6 +77,10 @@ export const forwardPlusFragSrc: string = processShaderRaw(forwardPlusFragRaw);
 
 export const clusteredDeferredFragSrc: string = processShaderRaw(clusteredDeferredFragRaw);
 export const clusteredDeferredShadingSrc: string = processShaderRaw(clusteredDeferredShadingRaw);
+
+export const depthPrepassFragSrc: string = processShaderRaw(depthPrepassFragRaw);
+export const clusterClearComputeSrc: string = processShaderRaw(clusterClearComputeRaw);
+export const clusterMarkComputeSrc: string = processShaderRaw(clusterMarkComputeRaw);
 
 export const moveLightsComputeSrc: string = processShaderRaw(moveLightsComputeRaw);
 export const clusteringComputeSrc: string = processShaderRaw(clusteringComputeRaw);

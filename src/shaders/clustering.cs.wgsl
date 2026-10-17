@@ -4,6 +4,11 @@
 @group(${bindGroup_scene}) @binding(1) var<uniform> cameraUniforms: CameraUniforms;
 @group(${bindGroup_scene}) @binding(2) var<storage, read_write> clusterLightCounts: array<u32>;
 @group(${bindGroup_scene}) @binding(3) var<storage, read_write> clusterLightIndices: array<u32>;
+@group(${bindGroup_scene}) @binding(4) var<storage, read> clusterActive: array<u32>;
+
+// Switcher for culling inactive clusters
+// Forward+: 1u, Clustered Deferred: 0u
+override cullInactiveClusters: u32 = 0u;
 
 // World-space AABB of the frustum cell of cluster
 fn clusterAABB(tileX: u32, tileY: u32, sliceZ: u32) -> array<vec3f, 2> {
@@ -46,6 +51,12 @@ fn main(@builtin(global_invocation_id) globalIdx: vec3u) {
     let tileX = clusterIdx % numClusterTilesX;
     let tileY = (clusterIdx / numClusterTilesX) % numClusterTilesY;
     let sliceZ = clusterIdx / (numClusterTilesX * numClusterTilesY);
+
+    // clusters the depth precull left without visible geometry get an empty light list
+    if (cullInactiveClusters == 1u && clusterActive[clusterIdx] == 0u) {
+        clusterLightCounts[clusterIdx] = 0u;
+        return;
+    }
 
     let aabb = clusterAABB(tileX, tileY, sliceZ);
     let aabbMin = aabb[0];

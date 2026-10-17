@@ -271,8 +271,8 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
             this.createShadingBindGroup(renderer.context.getCurrentTexture().createView())
         );
         shadingPass.dispatchWorkgroups(
-            Math.ceil(renderer.canvas.width / shaders.constants.shadingWorkgroupSize),
-            Math.ceil(renderer.canvas.height / shaders.constants.shadingWorkgroupSize)
+            Math.ceil(renderer.canvas.width / shaders.constants.screenWorkgroupSize),
+            Math.ceil(renderer.canvas.height / shaders.constants.screenWorkgroupSize)
         );
         shadingPass.end();
 
