@@ -11,8 +11,7 @@ Project 4 - WebGPU Forward+ and Clustered Deferred Shading**
 > **Declaration of AI assistance.** In line with the course's policy on AI
 > tools: the analysis text of this README, the benchmark harness and the demo
 > video were drafted with the help of Codex. Every number below is produced by
-> code in this repository and can be reproduced with the harness described in
-> the performance section. The implementation, the design decisions and the
+> code in this repository. The implementation, the design decisions and the
 > readings of the results were reviewed and accepted by the author, who is
 > responsible for their correctness.
 
@@ -98,8 +97,24 @@ that jumps between 6.1 and 12.1 ms.
   and at 12-13 ms after it, while the light count quintuples.
 * Clustered Deferred stays at 9-10 ms over the same range, so the depth prepass
   brings Forward+ from 3.3-3.7x behind Clustered Deferred to within 1.3-1.4x of it.
-* Both cluster lists saturate at 186 of the 6144 clusters hitting the 512 lights
-  per cluster cap.
+* Both cluster lists stay well under the 512 lights per cluster cap: with the
+  frozen test lights at 5000 lights only 1 of the 504 clusters that Forward+ bins
+  and 5 of the 4662 that Clustered Deferred bins reach it.
+
+### Why they differ
+
+Above 1000 lights Clustered Deferred is the faster of the two, and both are flat
+in the light count while naive is linear: the cost is set by how many lights each
+pixel walks, not by how many lights exist. Forward+ is the slower one because
+its shading pass writes depth, and a fragment shader that discards alpha-tested
+fragments cannot move its depth test in front of the shader, so occluded
+fragments still run the per-cluster loop; the depth prepass removes that by
+testing `equal` without writing depth, which is the gain in the next section.
+Clustered Deferred pays for lighting every pixel exactly once with a G-buffer
+write and read (8 bytes per pixel plus depth) and with a quantisation error,
+while Forward+ needs no extra bandwidth. At 100 and 500 lights all three sit on
+the 6.06 ms refresh floor, so the ordering only matters from about 1000 lights
+up.
 
 ### Depth prepass
 
